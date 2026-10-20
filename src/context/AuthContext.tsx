@@ -1,16 +1,16 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  type ReactNode,
+} from 'react';
 import Cookies from 'js-cookie';
 import { useRouter } from 'next/navigation';
 import { getDecodedToken } from '@/lib/auth';
-
-interface User {
-  id?: string;
-  email?: string;
-  role?: 'TENANT' | 'LANDLORD' | 'ADMIN';
-  name?: string;
-}
+import type { User, UserRole } from '@/services/types';
 
 interface AuthContextType {
   user: User | null;
@@ -18,10 +18,13 @@ interface AuthContextType {
   login: (token: string, user: User) => void;
   logout: () => void;
   isAuthenticated: boolean;
-  loading: boolean;
+  loading: boolean;      // kept for backward compat
+  isLoading: boolean;    // alias
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+const COOKIE_OPTS = { path: '/', expires: 7 } as const;
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -35,22 +38,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (savedToken) {
       setToken(savedToken);
+      let nextUser: User | null = null;
+
       if (savedUser) {
         try {
-          setUser(JSON.parse(savedUser));
+          nextUser = JSON.parse(savedUser) as User;
         } catch {
-          // If userData cookie isn't present, extract payload directly from JWT
-          const decoded = getDecodedToken(savedToken);
-          if (decoded) {
-            setUser({ id: decoded.id, email: decoded.email, role: decoded.role });
-          }
-        }
-      } else {
-        const decoded = getDecodedToken(savedToken);
-        if (decoded) {
-          setUser({ id: decoded.id, email: decoded.email, role: decoded.role });
+          nextUser = null;
         }
       }
+
+      if (!nextUser) {
+        const decoded = getDecodedToken(savedToken);
+        if (decoded) {
+          nextUser = {
+            id: decoded.id,
+            email: decoded.email,
+            name: '',
+            role: decoded.role as UserRole,
+          };
+        }
+      }
+
+      setUser(nextUser);
     } else {
       setToken(null);
       setUser(null);
@@ -65,9 +75,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = (newToken: string, newUser: User) => {
     const cleanToken = newToken.replace(/^Bearer\s+/i, '');
 
-    Cookies.set('accessToken', cleanToken, { path: '/', expires: 7 });
-    Cookies.set('userRole', newUser.role || '', { path: '/', expires: 7 });
-    Cookies.set('userData', JSON.stringify(newUser), { path: '/', expires: 7 });
+    Cookies.set('accessToken', cleanToken, COOKIE_OPTS);
+    Cookies.set('userRole', newUser.role, COOKIE_OPTS);
+    Cookies.set('userData', JSON.stringify(newUser), COOKIE_OPTS);
 
     setToken(cleanToken);
     setUser(newUser);
@@ -93,6 +103,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         logout,
         isAuthenticated: !!token,
         loading,
+        isLoading: loading,
       }}
     >
       {children}

@@ -3,7 +3,7 @@ export default function Loading() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <div className="flex flex-col items-center gap-3">
         <div className="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Loading RentNest...</p>
+        <p className="text-xs font-semibold text-slate-900 dark:text-white uppercase tracking-wider">Loading RentNest...</p>
       </div>
     </div>
   );

@@ -2,37 +2,15 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { fetchApi } from '@/lib/api';
+import { rentalService } from '@/services/rentalService';
+import type { RentalRequest, RentalStatus } from '@/services/types';
 
-interface Tenant {
-  id: string;
-  name?: string;
-  email: string;
-  phoneNumber?: string;
-}
-
-interface Property {
-  id: string;
-  title: string;
-  price: number;
-  city: string;
-  address: string;
-  images?: string[];
-}
-
-interface RentalRequest {
-  id: string;
-  propertyId: string;
-  property?: Property;
-  tenantId: string;
-  tenant?: Tenant;
-  moveInDate: string;
-  duration: number;
-  totalAmount?: number;
-  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'ACTIVE' | 'COMPLETED';
-  notes?: string;
-  createdAt?: string;
-}
+const STATUS_BADGE: Record<RentalStatus, string> = {
+  PENDING: 'bg-amber-100 text-amber-800 border-amber-200',
+  APPROVED: 'bg-blue-100 text-blue-800 border-blue-200',
+  REJECTED: 'bg-rose-100 text-rose-800 border-rose-200',
+  COMPLETED: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+};
 
 export default function LandlordRequestsPage() {
   const [requests, setRequests] = useState<RentalRequest[]>([]);
@@ -43,18 +21,13 @@ export default function LandlordRequestsPage() {
   const loadRequests = async () => {
     setLoading(true);
     setError('');
-
     try {
-      const response = await fetchApi<any>('/rentals');
-
-      const items = Array.isArray(response)
-        ? response
-        : response?.data || response?.requests || [];
-
+      const items = await rentalService.list();
       setRequests(items);
-    } catch (err: any) {
-      console.error('Failed to load requests:', err);
-      setError(err.message || 'Could not fetch tenant applications.');
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : 'Could not fetch tenant applications.'
+      );
     } finally {
       setLoading(false);
     }
@@ -64,40 +37,28 @@ export default function LandlordRequestsPage() {
     loadRequests();
   }, []);
 
-  const handleStatusUpdate = async (requestId: string, newStatus: 'APPROVED' | 'REJECTED') => {
+  const handleStatusUpdate = async (
+    requestId: string,
+    newStatus: 'APPROVED' | 'REJECTED'
+  ) => {
     setUpdatingId(requestId);
     setError('');
 
     try {
-      await fetchApi(`/rentals/landlord/${requestId}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ status: newStatus }),
-      });
+      await rentalService.updateStatus(requestId, newStatus);
       setRequests((prev) =>
-        prev.map((req) => (req.id === requestId ? { ...req, status: newStatus } : req))
+        prev.map((req) =>
+          req.id === requestId ? { ...req, status: newStatus } : req
+        )
       );
-    } catch (err: any) {
-      console.error(`Failed to update status to ${newStatus}:`, err);
-      setError(err.message || `Failed to update request to ${newStatus}.`);
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : `Failed to update request to ${newStatus}.`
+      );
     } finally {
       setUpdatingId(null);
-    }
-  };
-
-  // Helper for Status Badge Styling
-  const getStatusBadge = (status: RentalRequest['status']) => {
-    switch (status) {
-      case 'APPROVED':
-        return 'bg-blue-100 text-blue-800 border-blue-200';
-      case 'ACTIVE':
-        return 'bg-emerald-100 text-emerald-800 border-emerald-200';
-      case 'REJECTED':
-        return 'bg-rose-100 text-rose-800 border-rose-200';
-      case 'COMPLETED':
-        return 'bg-slate-100 text-slate-700 border-slate-200';
-      case 'PENDING':
-      default:
-        return 'bg-amber-100 text-amber-800 border-amber-200';
     }
   };
 
@@ -142,7 +103,6 @@ export default function LandlordRequestsPage() {
           ))}
         </div>
       ) : requests.length === 0 ? (
-        /* Empty State */
         <div className="bg-white border border-slate-200 rounded-2xl p-12 text-center space-y-4 shadow-xs">
           <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto text-slate-400 text-2xl font-bold">
             📋
@@ -150,12 +110,11 @@ export default function LandlordRequestsPage() {
           <div className="space-y-1">
             <h3 className="text-lg font-bold text-slate-900">No Rental Applications</h3>
             <p className="text-slate-500 text-sm max-w-sm mx-auto">
-              You don't have any tenant requests at the moment.
+              You don&apos;t have any tenant requests at the moment.
             </p>
           </div>
         </div>
       ) : (
-        /* Requests List */
         <div className="grid grid-cols-1 gap-6">
           {requests.map((req) => {
             const property = req.property;
@@ -169,7 +128,7 @@ export default function LandlordRequestsPage() {
                 key={req.id}
                 className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs hover:shadow-md transition flex flex-col md:flex-row gap-6 justify-between items-start md:items-center"
               >
-                {/* Property & Tenant Metadata */}
+                {/* Left: Property + Tenant */}
                 <div className="flex gap-4 items-center">
                   <img
                     src={propertyImage}
@@ -177,15 +136,11 @@ export default function LandlordRequestsPage() {
                     className="h-24 w-28 rounded-xl object-cover bg-slate-100 border border-slate-200 shrink-0"
                   />
                   <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={`text-xs font-bold px-2.5 py-0.5 rounded-full border ${getStatusBadge(
-                          req.status
-                        )}`}
-                      >
-                        {req.status}
-                      </span>
-                    </div>
+                    <span
+                      className={`inline-block text-xs font-bold px-2.5 py-0.5 rounded-full border ${STATUS_BADGE[req.status]}`}
+                    >
+                      {req.status}
+                    </span>
                     <h3 className="font-bold text-slate-900 text-lg line-clamp-1">
                       {property?.title || 'Property Title Unavailable'}
                     </h3>
@@ -195,21 +150,22 @@ export default function LandlordRequestsPage() {
                     </p>
                     <p className="text-xs text-slate-500">
                       Duration: {req.duration} Months | Move-in:{' '}
-                      {req.moveInDate ? new Date(req.moveInDate).toLocaleDateString() : 'N/A'}
+                      {req.moveInDate
+                        ? new Date(req.moveInDate).toLocaleDateString()
+                        : 'N/A'}
                     </p>
                   </div>
                 </div>
 
-                {/* Right Column Actions */}
+                {/* Right: Amount + Actions */}
                 <div className="flex flex-col sm:flex-row md:flex-col items-start md:items-end gap-3 w-full md:w-auto border-t md:border-t-0 pt-4 md:pt-0 border-slate-100">
                   <div className="text-left md:text-right">
                     <p className="text-xs text-slate-400 font-medium">Total Rent Value</p>
                     <p className="text-xl font-black text-slate-900">
-                      ${req.totalAmount || (property?.price ? property.price * req.duration : 0)}
+                      ${req.totalAmount ?? (property?.price ? property.price * req.duration : 0)}
                     </p>
                   </div>
 
-                  {/* Interactive Approve/Reject Buttons */}
                   {req.status === 'PENDING' ? (
                     <div className="flex gap-2 w-full sm:w-auto">
                       <button

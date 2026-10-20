@@ -1,24 +1,28 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { getAllUsers, updateUserStatus, UserItem } from '@/lib/adminApi';
+import { adminService } from '@/services/adminService';
+import type { User, UserRole, UserStatus } from '@/services/types';
+import Link from 'next/link';
+import { Tag } from 'lucide-react';
 
 export default function AdminDashboardPage() {
-  const [users, setUsers] = useState<UserItem[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
-  const [roleFilter, setRoleFilter] = useState('ALL');
+  const [roleFilter, setRoleFilter] = useState<UserRole | 'ALL'>('ALL');
 
   const loadUsers = async () => {
     setLoading(true);
     setError('');
     try {
-      const data = await getAllUsers();
+      const data = await adminService.listUsers();
       setUsers(data);
-    } catch (err: any) {
-      console.error('Failed to load users:', err);
-      setError(err.message || 'Failed to fetch user list from backend.');
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : 'Failed to fetch user list from backend.'
+      );
     } finally {
       setLoading(false);
     }
@@ -28,23 +32,20 @@ export default function AdminDashboardPage() {
     loadUsers();
   }, []);
 
-  // Action: Toggle Status (ACTIVE <-> BLOCKED)
-  const handleToggleStatus = async (user: UserItem) => {
-    const nextStatus: 'ACTIVE' | 'BLOCKED' = user.status === 'BLOCKED' ? 'ACTIVE' : 'BLOCKED';
+  const handleToggleStatus = async (user: User) => {
+    const nextStatus: UserStatus =
+      user.status === 'BLOCKED' ? 'ACTIVE' : 'BLOCKED';
 
     try {
-      await updateUserStatus(user.id, nextStatus);
-      
-      // Update UI state upon success
+      await adminService.setStatus(user.id, nextStatus);
       setUsers((prev) =>
         prev.map((u) => (u.id === user.id ? { ...u, status: nextStatus } : u))
       );
-    } catch (err: any) {
-      alert(err.message || 'Failed to update user status');
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to update user status');
     }
   };
 
-  // Filtered Users List
   const filteredUsers = users.filter((u) => {
     const matchesSearch =
       u.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -60,10 +61,23 @@ export default function AdminDashboardPage() {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
       <div>
         <h1 className="text-3xl font-extrabold text-slate-900">Admin Control Center</h1>
-        <p className="text-slate-500 text-sm mt-1">Manage user accounts and status permissions.</p>
+        <p className="text-slate-500 text-sm mt-1">
+          Manage user accounts and status permissions.
+        </p>
       </div>
 
-      {/* Stats Summary Cards */}
+      <div className="flex gap-3">
+  <Link
+    href="/dashboard/admin/categories"
+    className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold px-5 py-2.5 rounded-xl transition shadow-xs"
+  >
+    <Tag className="w-4 h-4" />
+    Manage Categories
+  </Link>
+</div>
+
+
+      {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
         <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs">
           <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Accounts</p>
@@ -79,7 +93,7 @@ export default function AdminDashboardPage() {
         </div>
       </div>
 
-      {/* User Table Card */}
+      {/* User Table */}
       <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
         <div className="p-6 border-b border-slate-100 flex flex-col md:flex-row gap-4 justify-between items-center">
           <h2 className="text-xl font-bold text-slate-900">User Management</h2>
@@ -94,7 +108,9 @@ export default function AdminDashboardPage() {
             />
             <select
               value={roleFilter}
-              onChange={(e) => setRoleFilter(e.target.value)}
+              onChange={(e) =>
+                setRoleFilter(e.target.value as UserRole | 'ALL')
+              }
               className="px-4 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-600 bg-white"
             >
               <option value="ALL">All Roles</option>
@@ -136,7 +152,9 @@ export default function AdminDashboardPage() {
                 {filteredUsers.map((user) => (
                   <tr key={user.id} className="hover:bg-slate-50 transition">
                     <td className="py-4 px-6">
-                      <p className="font-semibold text-slate-900">{user.name || 'Unnamed User'}</p>
+                      <p className="font-semibold text-slate-900">
+                        {user.name || 'Unnamed User'}
+                      </p>
                       <p className="text-xs text-slate-500">{user.email}</p>
                     </td>
                     <td className="py-4 px-6">

@@ -2,42 +2,24 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { fetchApi } from '@/lib/api';
-
-interface Property {
-  id: string;
-  title: string;
-  city: string;
-  address: string;
-  price: number;
-  bedrooms?: number;
-  bathrooms?: number;
-  isAvailable?: boolean;
-  images?: string[];
-  landlordId?: string;
-  landlord?: { id: string };
-}
+import { propertyService } from '@/services/propertyService';
+import type { LandlordProperty } from '@/services/types';
 
 export default function LandlordDashboardPage() {
-  const [properties, setProperties] = useState<Property[]>([]);
+  const [properties, setProperties] = useState<LandlordProperty[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   const loadLandlordProperties = async () => {
     setLoading(true);
     setError('');
-
     try {
-      // Dedicated endpoint returns only this landlord's properties
-      const response = await fetchApi<any>('/properties/landlord');
-      const myProperties: Property[] = Array.isArray(response)
-        ? response
-        : response?.data || response?.properties || [];
-
-      setProperties(myProperties);
-    } catch (err: any) {
-      console.error('Failed to load landlord properties:', err);
-      setError(err.message || 'Could not fetch your properties.');
+      const list = await propertyService.listMine();
+      setProperties(list);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : 'Could not fetch your properties.'
+      );
     } finally {
       setLoading(false);
     }
@@ -49,11 +31,15 @@ export default function LandlordDashboardPage() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-      {/* Dashboard UI */}
+      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-6">
         <div>
-          <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">Landlord Dashboard</h1>
-          <p className="text-slate-500 text-sm mt-1">Manage your active rental property listings.</p>
+          <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">
+            Landlord Dashboard
+          </h1>
+          <p className="text-slate-500 text-sm mt-1">
+            Manage your active rental property listings.
+          </p>
         </div>
         <div className="flex gap-3">
           <Link
@@ -71,10 +57,32 @@ export default function LandlordDashboardPage() {
         </div>
       </div>
 
-      {/* Property List Table */}
+      {error && (
+        <div className="p-4 bg-rose-50 border border-rose-200 text-rose-700 text-sm rounded-2xl flex justify-between items-center">
+          <span>{error}</span>
+          <button
+            onClick={loadLandlordProperties}
+            className="text-xs font-bold underline hover:no-underline cursor-pointer"
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
+      {/* Properties table */}
       <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs">
-        <div className="p-6 border-b border-slate-100">
-          <h2 className="text-xl font-bold text-slate-900">Your Listed Properties ({properties.length})</h2>
+        <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+          <h2 className="text-xl font-bold text-slate-900">
+            Your Listed Properties ({properties.length})
+          </h2>
+          {properties.length > 0 && (
+            <Link
+              href="/dashboard/landlord/properties"
+              className="text-xs font-semibold text-indigo-600 hover:underline"
+            >
+              Manage all →
+            </Link>
+          )}
         </div>
 
         {loading ? (
@@ -85,7 +93,7 @@ export default function LandlordDashboardPage() {
           </div>
         ) : properties.length === 0 ? (
           <div className="p-12 text-center space-y-4">
-            <p className="text-slate-500 text-sm">You haven't added any properties yet.</p>
+            <p className="text-slate-500 text-sm">You haven&apos;t added any properties yet.</p>
             <Link
               href="/dashboard/landlord/properties/new"
               className="inline-block bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold px-5 py-2.5 rounded-xl transition"
@@ -107,10 +115,20 @@ export default function LandlordDashboardPage() {
               <tbody className="divide-y divide-slate-100">
                 {properties.map((property) => (
                   <tr key={property.id} className="hover:bg-slate-50 transition">
-                    <td className="py-4 px-6 font-bold text-slate-900">{property.title}</td>
+                    <td className="py-4 px-6 font-bold text-slate-900">
+                      {property.title}
+                    </td>
                     <td className="py-4 px-6 text-slate-600">{property.city}</td>
-                    <td className="py-4 px-6 font-bold text-slate-900">${property.price}/mo</td>
-                    <td className="py-4 px-6 text-right">
+                    <td className="py-4 px-6 font-bold text-slate-900">
+                      ${property.price}/mo
+                    </td>
+                    <td className="py-4 px-6 text-right space-x-2">
+                      <Link
+                        href={`/dashboard/landlord/properties/${property.id}/edit`}
+                        className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-100 transition inline-block"
+                      >
+                        Edit
+                      </Link>
                       <Link
                         href={`/properties/${property.id}`}
                         className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-100 transition inline-block"

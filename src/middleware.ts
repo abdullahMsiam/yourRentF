@@ -1,3 +1,93 @@
+/* import { NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
+import { jwtDecode } from 'jwt-decode';
+
+interface JwtPayload {
+  id?: string;
+  role?: string;
+  exp?: number;
+}
+
+const ROLE_HOME: Record<string, string> = {
+  TENANT: '/dashboard/tenant',
+  LANDLORD: '/dashboard/landlord',
+  ADMIN: '/dashboard/admin',
+};
+
+// Routes accessible by ANY authenticated dashboard user
+const SHARED_DASHBOARD_ROUTES = ['profile', 'settings'];
+
+export function middleware(request: NextRequest) {
+  const token = request.cookies.get('accessToken')?.value;
+  const { pathname } = request.nextUrl;
+
+  if (!pathname.startsWith('/dashboard')) {
+    return NextResponse.next();
+  }
+
+  // 1. Missing token
+  if (!token) {
+    return NextResponse.redirect(new URL('/login', request.url));
+  }
+
+  // 2. Decode JWT
+  let decoded: JwtPayload;
+  try {
+    decoded = jwtDecode<JwtPayload>(token);
+  } catch {
+    const res = NextResponse.redirect(new URL('/login', request.url));
+    res.cookies.delete('accessToken');
+    res.cookies.delete('userRole');
+    return res;
+  }
+
+  // 3. Expiry check
+  const now = Math.floor(Date.now() / 1000);
+  if (decoded.exp && decoded.exp < now) {
+    const res = NextResponse.redirect(new URL('/login', request.url));
+    res.cookies.delete('accessToken');
+    res.cookies.delete('userRole');
+    return res;
+  }
+
+  const role = decoded.role;
+  const home = role ? ROLE_HOME[role] : undefined;
+
+  if (!home) {
+    return NextResponse.redirect(new URL('/login', request.url));
+  }
+
+  // 4. Landing on /dashboard → role home
+  if (pathname === '/dashboard' || pathname === '/dashboard/') {
+    return NextResponse.redirect(new URL(home, request.url));
+  }
+
+  // 5. Split path segments
+  const segments = pathname.split('/'); // ['', 'dashboard', '<sub>', ...]
+  const sub = segments[2];
+
+  // 6. Shared routes — any authenticated role can access
+  if (SHARED_DASHBOARD_ROUTES.includes(sub)) {
+    return NextResponse.next();
+  }
+
+  // 7. Role guard for role-specific dashboards
+  const allowedSub =
+    (role === 'TENANT' && sub === 'tenant') ||
+    (role === 'LANDLORD' && sub === 'landlord') ||
+    (role === 'ADMIN' && sub === 'admin');
+
+  if (!allowedSub) {
+    return NextResponse.redirect(new URL(home, request.url));
+  }
+
+  return NextResponse.next();
+}
+
+export const config = {
+  matcher: ['/dashboard/:path*'],
+}; */
+
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { jwtDecode } from 'jwt-decode';
@@ -8,52 +98,77 @@ interface JwtPayload {
   exp?: number;
 }
 
+const ROLE_HOME: Record<string, string> = {
+  TENANT: '/dashboard/tenant',
+  LANDLORD: '/dashboard/landlord',
+  ADMIN: '/dashboard/admin',
+};
+
+// Routes accessible by ANY authenticated dashboard user
+const SHARED_DASHBOARD_ROUTES = ['profile', 'settings'];
+
 export function middleware(request: NextRequest) {
   const token = request.cookies.get('accessToken')?.value;
   const { pathname } = request.nextUrl;
 
-  // Protect all Dashboard sub-routes
-  if (pathname.startsWith('/dashboard')) {
-    // 1. Missing Token Check
-    if (!token) {
-      return NextResponse.redirect(new URL('/login', request.url));
-    }
+  if (!pathname.startsWith('/dashboard')) {
+    return NextResponse.next();
+  }
 
-    try {
-      // 2. Decode JWT Payload
-      const decoded = jwtDecode<JwtPayload>(token);
-      const currentTime = Math.floor(Date.now() / 1000);
+  // 1. Missing token
+  if (!token) {
+    return NextResponse.redirect(new URL('/login', request.url));
+  }
 
-      // 3. Expiration Check
-      if (decoded.exp && decoded.exp < currentTime) {
-        const response = NextResponse.redirect(new URL('/login', request.url));
-        response.cookies.delete('accessToken');
-        response.cookies.delete('userRole');
-        return response;
-      }
+  // 2. Decode JWT
+  let decoded: JwtPayload;
+  try {
+    decoded = jwtDecode<JwtPayload>(token);
+  } catch {
+    const res = NextResponse.redirect(new URL('/login', request.url));
+    res.cookies.delete('accessToken');
+    res.cookies.delete('userRole');
+    return res;
+  }
 
-      // 4. Role Guard Validation
-      const userRole = decoded.role;
+  // 3. Expiry check
+  const now = Math.floor(Date.now() / 1000);
+  if (decoded.exp && decoded.exp < now) {
+    const res = NextResponse.redirect(new URL('/login', request.url));
+    res.cookies.delete('accessToken');
+    res.cookies.delete('userRole');
+    return res;
+  }
 
-      if (pathname.startsWith('/dashboard/landlord') && userRole !== 'LANDLORD') {
-        return NextResponse.redirect(new URL('/dashboard', request.url));
-      }
+  const role = decoded.role;
+  const home = role ? ROLE_HOME[role] : undefined;
 
-      if (pathname.startsWith('/dashboard/admin') && userRole !== 'ADMIN') {
-        return NextResponse.redirect(new URL('/dashboard', request.url));
-      }
+  if (!home) {
+    return NextResponse.redirect(new URL('/login', request.url));
+  }
 
-      if (pathname.startsWith('/dashboard/tenant') && userRole !== 'TENANT') {
-        return NextResponse.redirect(new URL('/dashboard', request.url));
-      }
+  // 4. Landing on /dashboard → role home
+  if (pathname === '/dashboard' || pathname === '/dashboard/') {
+    return NextResponse.redirect(new URL(home, request.url));
+  }
 
-    } catch (error) {
-      // Malformed or invalid JWT token structure
-      const response = NextResponse.redirect(new URL('/login', request.url));
-      response.cookies.delete('accessToken');
-      response.cookies.delete('userRole');
-      return response;
-    }
+  // 5. Split path segments
+  const segments = pathname.split('/'); // ['', 'dashboard', '<sub>', ...]
+  const sub = segments[2];
+
+  // 6. Shared routes — any authenticated role can access
+  if (SHARED_DASHBOARD_ROUTES.includes(sub)) {
+    return NextResponse.next();
+  }
+
+  // 7. Role guard for role-specific dashboards
+  const allowedSub =
+    (role === 'TENANT' && sub === 'tenant') ||
+    (role === 'LANDLORD' && sub === 'landlord') ||
+    (role === 'ADMIN' && sub === 'admin');
+
+  if (!allowedSub) {
+    return NextResponse.redirect(new URL(home, request.url));
   }
 
   return NextResponse.next();

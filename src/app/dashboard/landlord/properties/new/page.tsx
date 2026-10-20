@@ -3,21 +3,16 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { fetchApi } from '@/lib/api';
-
-interface Category {
-  id: string;
-  name: string;
-}
+import { propertyService } from '@/services/propertyService';
+import { categoryService } from '@/services/categoryService';
+import type { Category, CreatePropertyPayload } from '@/services/types';
 
 export default function NewPropertyPage() {
   const router = useRouter();
 
-  // Categories State
   const [categories, setCategories] = useState<Category[]>([]);
   const [fetchingCategories, setFetchingCategories] = useState(true);
 
-  // Form State
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -27,43 +22,35 @@ export default function NewPropertyPage() {
     bedrooms: '1',
     bathrooms: '1',
     categoryId: '',
-    amenities: '', // Comma-separated in form, converted to Array on submit
-    images: '',    // Comma-separated in form, converted to Array on submit
+    amenities: '',
+    images: '',
   });
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // 1. Fetch available categories when component mounts
   useEffect(() => {
     const loadCategories = async () => {
       setFetchingCategories(true);
       try {
-        const response = await fetchApi<any>('/categories');
-        
-        // Normalize categories payload (handles arrays or wrapped objects)
-        const items = Array.isArray(response)
-          ? response
-          : response?.data || response?.categories || [];
-
+        const items = await categoryService.list();
         setCategories(items);
-
-        // Pre-select the first category if available
         if (items.length > 0) {
           setFormData((prev) => ({ ...prev, categoryId: items[0].id }));
         }
-      } catch (err: any) {
-        console.error('Failed to load categories:', err);
-        setError('Failed to load categories. Make sure your backend has created categories.');
+      } catch (err) {
+        setError(
+          err instanceof Error
+            ? err.message
+            : 'Failed to load categories.'
+        );
       } finally {
         setFetchingCategories(false);
       }
     };
-
     loadCategories();
   }, []);
 
-  // 2. Handle Form Submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -76,8 +63,7 @@ export default function NewPropertyPage() {
     }
 
     try {
-      // Process input values into proper data types for backend/Prisma
-      const payload = {
+      const payload: CreatePropertyPayload = {
         title: formData.title,
         description: formData.description,
         price: Number(formData.price),
@@ -91,29 +77,28 @@ export default function NewPropertyPage() {
           : [],
         images: formData.images
           ? formData.images.split(',').map((img) => img.trim()).filter(Boolean)
-          : ['https://images.unsplash.com/photo-1560518883-ce09059eeffa?auto=format&fit=crop&w=600&q=80'],
+          : [],
       };
 
-      // Calls POST /properties/landlord or /properties based on your route configuration
-      await fetchApi('/properties/landlord', {
-        method: 'POST',
-        body: JSON.stringify(payload),
-      });
+      await propertyService.create(payload);
 
-      // Redirect back to Landlord Dashboard on success
       router.push('/dashboard/landlord');
       router.refresh();
-    } catch (err: any) {
-      console.error('Failed to create property:', err);
-      setError(err.message || 'Could not create property. Please try again.');
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Could not create property. Please try again.'
+      );
     } finally {
       setLoading(false);
     }
   };
 
+  // ... JSX অপরিবর্তিত থাকবে (আপনার existing)
+  // উপরের `error`, `categories`, `formData`, `loading` state গুলোই ব্যবহার করছেন
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
-      {/* Top Header */}
       <div className="flex justify-between items-center border-b border-slate-200 pb-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Add New Property</h1>
@@ -127,7 +112,6 @@ export default function NewPropertyPage() {
         </Link>
       </div>
 
-      {/* Error Alert */}
       {error && (
         <div className="bg-rose-50 border border-rose-200 text-rose-600 text-sm p-4 rounded-xl">
           {error}
@@ -294,4 +278,4 @@ export default function NewPropertyPage() {
       </form>
     </div>
   );
-}
+}; 
